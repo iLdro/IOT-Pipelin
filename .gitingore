@@ -1,2 +1,8 @@
 ./Kafka
-./consumerKafa/private.py
+private.py
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+private.py
