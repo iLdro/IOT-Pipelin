@@ -20,7 +20,7 @@ def generate_fake_car_log():
             'device_type': 'general',
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()),
             'speed': 0,
-            'fuel_level': 0,
+            'fuel_level': round(fake.random.uniform(5, 15), 2),
             'engine_temperature': 0,
             'status': status,
             'log_type': 'log',

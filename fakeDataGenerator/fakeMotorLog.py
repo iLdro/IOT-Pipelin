@@ -23,11 +23,7 @@ def generate_fake_motor_log():
             'power': 0,
             'vibration': 0,
             'status': status,
-            'log_type': 'log',
-            'location': {
-                'latitude': fake.latitude(),
-                'longitude': fake.longitude()
-            }
+            'log_type': 'log'
         }
     # If the motor is active, randomly decide if this log should be an error or warning
     elif random.random() < 0.1:  # 10% chance of error
@@ -39,11 +35,7 @@ def generate_fake_motor_log():
             'power': None,
             'vibration': None,
             'status': status,
-            'log_type': 'error',
-            'location': {
-                'latitude': fake.latitude(),
-                'longitude': fake.longitude()
-            }
+            'log_type': 'error'
         }
     elif random.random() < 0.1:  # 10% chance of warning
         data = {
@@ -54,11 +46,7 @@ def generate_fake_motor_log():
             'power': round(fake.random.uniform(150, 300), 2),
             'vibration': round(fake.random.uniform(10.0, 20.0), 2),
             'status': status,
-            'log_type': 'warning',
-            'location': {
-                'latitude': fake.latitude(),
-                'longitude': fake.longitude()
-            }
+            'log_type': 'warning'
         }
     else:  # Regular log for active motor
         data = {
@@ -69,11 +57,7 @@ def generate_fake_motor_log():
             'power': round(fake.random.uniform(100, 150), 2),
             'vibration': round(fake.random.uniform(5.0, 10.0), 2),
             'status': status,
-            'log_type': 'log',
-            'location': {
-                'latitude': fake.latitude(),
-                'longitude': fake.longitude()
-            }
+            'log_type': 'log'
         }
     send('iot_log', data)
 
