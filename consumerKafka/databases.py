@@ -30,6 +30,11 @@ class MongoDatabases:
             return result[0][ope+column]
         return None
 
+    def percentLogType(self, collection, type):
+        count = self.db[collection].count_documents({'log_type' : type})
+        total = self.db[collection].count_documents({})
+        return count*100/total
+
     def computeAndStoreStats(self, collection, stats_collection):
         avg_temp = self.processData(collection, 'avg', 'temperature')
         max_temp = self.processData(collection, 'max', 'temperature')
@@ -37,6 +42,8 @@ class MongoDatabases:
         avg_humidity = self.processData(collection, 'avg', 'humidity')
         max_humidity = self.processData(collection, 'max', 'humidity')
         min_humidity = self.processData(collection, 'min', 'humidity')
+        warningPercent = self.percentLogType(collection, 'warning')
+        errorPercent = self.percentLogType(collection, 'error')
 
         stats = {
             'average_temperature': avg_temp,
@@ -45,6 +52,8 @@ class MongoDatabases:
             'average_humidity': avg_humidity,
             'max_humidity': max_humidity,
             'min_humidity': min_humidity,
+            'warning%': warningPercent,
+            'error%': errorPercent,
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
         }
         self.db[stats_collection].insert_one(stats)
@@ -69,6 +78,7 @@ class MongoDatabases:
 
 if __name__ == "__main__":
     test = MongoDatabases()
+
     test.startPeriodicStatsUpdate('iot_logs', 'iot_stats')
 
     # Keep the main thread alive
