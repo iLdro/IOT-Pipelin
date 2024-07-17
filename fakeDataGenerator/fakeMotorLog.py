@@ -4,14 +4,9 @@ from faker import Faker
 from publisher import send
 from const import fake_ids
 
-def generate_fake_motor_log():
+def generate_fake_motor_log(status='active'):
     fake = Faker()
 
-    # Randomly decide the status of the motor with a certain probability for 'inactive'
-    if random.random() < 0.1:  # 10% chance the motor is inactive
-        status = 'inactive'
-    else:
-        status = 'active'
 
     # If the motor is inactive, generate the inactive log data
     if status == 'inactive':

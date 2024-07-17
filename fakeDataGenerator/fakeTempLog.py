@@ -5,9 +5,8 @@ from publisher import send
 from const import fake_ids
 
 
-def generate_fake_thermotre_exterior_log():
+def generate_fake_thermotre_exterior_log(status):
     fake = Faker()
-    status = fake.random_element(elements=('active', 'inactive'))
 
     # Randomly decide if this log should be an error or warning
     if random.random() < 0.1:  # 10% chance of error

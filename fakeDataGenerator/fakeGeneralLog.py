@@ -4,16 +4,9 @@ from faker import Faker
 from publisher import send
 from const import fake_ids
 
-def generate_fake_car_log():
+def generate_fake_car_log(status='running'):
     fake = Faker()
 
-    # Randomly decide the status of the car with a certain probability for 'stopped'
-    if random.random() < 0.1:  # 10% chance the car is stopped
-        status = 'stopped'
-    else:
-        status = 'running'
-
-    # If the car is stopped, generate the stopped log data
     if status == 'stopped':
         data = {
             'device_id': fake_ids[random.randint(0, 9)],
