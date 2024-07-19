@@ -53,11 +53,11 @@ class MongoDatabases:
         else:
             print(f"No data found for device_id: {device_id}")
 
-    def computeVehicleStats(self):
+    def computeVehicleStats(self, device_id):
         pipeline = [
             {
                 '$match': {
-                    'device_id': {'$ne': None}
+                    'device_id': device_id
                 }
             },
             {
@@ -69,35 +69,36 @@ class MongoDatabases:
                     'maxMotorSpeed': {'$max': '$motorSpeed'},
                     'averageEngineTemperature': {'$avg': '$engine_temperature'},
                     'maxEngineTemperature': {'$max': '$engine_temperature'},
-
+                    'count': {'$sum': 1}
                 }
             }
         ]
         results = self.db['combined'].aggregate(pipeline)
         for result in results:
             average_data = {
-                'device_id': result['_id'],
+                'device_id': device_id,
                 'averageGeneralSpeed': result['averageGeneralSpeed'],
                 'maxGeneralSpeed': result['maxGeneralSpeed'],
                 'averageMotorSpeed': result['averageMotorSpeed'],
                 'maxMotorSpeed': result['maxMotorSpeed'],
                 'averageEngineTemperature': result['averageEngineTemperature'],
                 'maxEngineTemperature': result['maxEngineTemperature'],
+                'nbLogs': result['count'],
                 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
             }
             self.db['VehiculeStats'].update_one(
-                {'device_id': result['_id']},
+                {'device_id': device_id},
                 {'$set': average_data},
                 upsert=True
             )
             print(f"Updated stats for device ID: {result['_id']}, Data: {average_data}")
 
 
-    def computeOutdoorStats(self):
+    def computeOutdoorStats(self, device_id):
         pipeline = [
             {
                 '$match': {
-                    'device_id': {'$ne': None}
+                    'device_id': device_id
                 }
             },
             {
@@ -109,23 +110,25 @@ class MongoDatabases:
                     'averageHumidity': {'$avg': '$humidity'},
                     'maxHumidity': {'$max': '$humidity'},
                     'minHumidity': {'$min': '$humidity'},
+                    'count': {'$sum': 1}
+
                 }
             }
         ]
         results = self.db['combined'].aggregate(pipeline)
         for result in results:
             average_data = {
-                'device_id': result['_id'],
                 'averageOutdoorTemperature': result['averageTemperature'],
                 'maxOutdoorTemperature': result['maxTemperature'],
                 'minOutdoorTemperature': result['minTemperature'],
                 'averageOutdoorHumidity': result['averageHumidity'],
                 'maxOutdoorHumidity': result['maxHumidity'],
                 'minOutdoorHumidity': result['minHumidity'],
+                'count': result['count'],
                 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
             }
             self.db['OutdoorStats'].update_one(
-                {'device_id': result['_id']},
+                {'device_id': device_id},
                 {'$set': average_data},
                 upsert=True
             )
@@ -136,7 +139,9 @@ class MongoDatabases:
         device_ids = self.db['combined'].distinct('device_id')
 
         for device_id in device_ids:
-            self.calculate_and_store_aggregates(device_id)
+            # self.calculate_and_store_aggregates(device_id)
+            self.computeVehicleStats(device_id)
+            self.computeOutdoorStats(device_id)
             print(f"Processed device_id: {device_id}")
 
     def calculate_and_store_aggregates(self, device_id):
@@ -220,8 +225,7 @@ class MongoDatabases:
     def startPeriodicStatsUpdate(self, interval=3):
         def run():
             while True:
-                db.computeVehicleStats()
-                db.computeOutdoorStats()
+                db.process_all_devices()
                 time.sleep(interval)
 
         thread = Thread(target=run)
@@ -238,7 +242,7 @@ if __name__ == "__main__":
     # db.computeVehicleStats()
     # db.computeOutdoorStats()
 
-    # db.process_all_devices()
+    db.process_all_devices()
 
     db.count_general_log_types()
 
