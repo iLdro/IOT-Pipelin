@@ -43,6 +43,7 @@ class MongoDatabases:
                 'motorLog': motor_data.get('log_type'),
                 'temperature': thermometer_data.get('temperature') if thermometer_data else None,
                 'humidity': thermometer_data.get('humidity') if thermometer_data else None,
+                'outdoorLog' : thermometer_data.get('log_type'),
                 'location': general_data.get('location'),
             }
 
@@ -139,39 +140,61 @@ class MongoDatabases:
         device_ids = self.db['combined'].distinct('device_id')
 
         for device_id in device_ids:
-            # self.calculate_and_store_aggregates(device_id)
             self.computeVehicleStats(device_id)
             self.computeOutdoorStats(device_id)
             print(f"Processed device_id: {device_id}")
 
-    def calculate_and_store_aggregates(self, device_id):
+    def find_device_with_most_errors(self):
         pipeline = [
-            {'$match': {'device_id': device_id}},
-            {'$group': {
-                '_id': '$device_id',
-                'averageTemperature': {'$avg': '$temperature'},
-                'maxTemperature': {'$max': '$temperature'},
-                'averageGeneralSpeed': {'$avg': '$generalSpeed'},
-                'maxGeneralSpeed': {'$max': '$generalSpeed'},
-                'averageMotorSpeed': {'$avg': '$motorSpeed'},
-                'maxMotorSpeed': {'$max': '$motorSpeed'},
-                'averageEngineTemperature': {'$avg': '$engine_temperature'},
-                'maxEngineTemperature': {'$max': '$engine_temperature'},
-            }}
+            {
+                '$match': {
+                    '$or': [
+                        {'generalLogType': 'error'},
+                        {'motorLog': 'error'},
+                        {'outdoorLog': 'error'}
+                    ]
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$device_id',
+                    'errorCount': {'$sum': 1}
+                }
+            },
+            {
+                '$sort': {'errorCount': -1}
+            },
+            {
+                '$limit': 1
+            }
         ]
-        result = list(self.db['combined'].aggregate(pipeline))
-        if result:
-            aggregate_data = result[0]
-            aggregate_data['timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-            # Insert the aggregate data into a new collection
-            self.db['aggregated_data'].insert_one(aggregate_data)
-            print(f"Stored aggregate data: {aggregate_data}")
-        else:
-            print(f"No data found for device_id: {device_id}")
 
-    def count_general_log_types(self):
-    # Get all distinct device_ids
+        results = list(self.db['combined'].aggregate(pipeline))
+
+        if results:
+            most_errors = results[0]
+            error_data = {
+                'device_id': most_errors['_id'],
+                'errorCount': most_errors['errorCount'],
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+            }
+
+            self.db['error_stats'].update_one(
+                {'device_id': most_errors['_id']},
+                {'$set': error_data},
+                upsert=True
+            )
+
+            print(f"Device with most errors: {error_data}")
+        else:
+            print("No errors found in the combined collection.")
+
+
+
+    def count_log_types(self):
+        # Get all distinct device_ids
         distinct_device_ids = self.db['combined'].distinct('device_id')
+
         for device_id in distinct_device_ids:
             pipeline = [
                 {
@@ -181,19 +204,24 @@ class MongoDatabases:
                 },
                 {
                     '$group': {
-                        '_id': '$generalLogType',
+                        '_id': {
+                            'generalLogType': '$generalLogType',
+                            'motorLog': '$motorLog',
+                            'outdoorLog': '$outdoorLog'
+                        },
                         'count': {'$sum': 1}
                     }
                 }
             ]
             results = self.db['combined'].aggregate(pipeline)
             log_counts = {'error': 0, 'warning': 0, 'log': 0}
+
             for result in results:
-                log_type = result['_id']
-                count = result['count']
-                if log_type in log_counts:
-                    log_counts[log_type] = count
-            # Prepare data to be stored in 'stats'
+                for log_type, count in result['_id'].items():
+                    if log_type in log_counts:
+                        log_counts[log_type] += result['count']
+
+            # Prepare data to be stored in 'logsStats'
             stats_data = {
                 'device_id': device_id,
                 'error_count': log_counts['error'],
@@ -201,6 +229,7 @@ class MongoDatabases:
                 'log_count': log_counts['log'],
                 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
             }
+
             # Insert or update the stats data
             self.db['logsStats'].update_one(
                 {'device_id': device_id},
@@ -222,10 +251,12 @@ class MongoDatabases:
         thread.daemon = True
         thread.start()
 
-    def startPeriodicStatsUpdate(self, interval=3):
+    def startPeriodicStatsUpdate(self, interval=10):
         def run():
             while True:
                 db.process_all_devices()
+                db.count_log_types()
+                db.find_device_with_most_errors()
                 time.sleep(interval)
 
         thread = Thread(target=run)
@@ -236,15 +267,8 @@ class MongoDatabases:
 if __name__ == "__main__":
     db = MongoDatabases()
 
-    # db.startPeriodicMergeUpdate()
-    # db.startPeriodicStatsUpdate()
-
-    # db.computeVehicleStats()
-    # db.computeOutdoorStats()
-
-    db.process_all_devices()
-
-    db.count_general_log_types()
+    db.startPeriodicMergeUpdate()
+    db.startPeriodicStatsUpdate()
 
     # Keep the main thread alive
     while True:
