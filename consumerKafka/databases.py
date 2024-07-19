@@ -17,25 +17,6 @@ class MongoDatabases:
         self.db[collection].insert_one(data)
         print(f"Inserted: {data}")
 
-    def retrieveAll(self, collection):
-        documents = self.db[collection].find()
-        all_docs = list(documents)
-        return all_docs
-
-    def processData(self, collection, ope, column):
-        pipeline = [
-            {'$match' : {column: {'$ne': None}}},
-            {'$group': {'_id': None, ope+column: {'$'+ope : '$'+column}}}
-        ]
-        result = list(self.db[collection].aggregate(pipeline))
-        if result:
-            return result[0][ope+column]
-        return None
-
-    def percentLogType(self, collection, type):
-        count = self.db[collection].count_documents({'log_type' : type})
-        total = self.db[collection].count_documents({})
-        return count*100/total
 
     def get_latest_document(self, collection):
         latest_doc = self.db[collection].find_one(sort=[('_id', pymongo.DESCENDING)])
@@ -72,41 +53,157 @@ class MongoDatabases:
         else:
             print(f"No data found for device_id: {device_id}")
 
+    def computeVehicleStats(self):
+        pipeline = [
+            {
+                '$match': {
+                    'device_id': {'$ne': None}
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$device_id',
+                    'averageGeneralSpeed': {'$avg': '$generalSpeed'},
+                    'maxGeneralSpeed': {'$max': '$generalSpeed'},
+                    'averageMotorSpeed': {'$avg': '$motorSpeed'},
+                    'maxMotorSpeed': {'$max': '$motorSpeed'},
+                    'averageEngineTemperature': {'$avg': '$engine_temperature'},
+                    'maxEngineTemperature': {'$max': '$engine_temperature'},
 
-    def computeAndStoreStats(self, collection, stats_collection):
-        avg_temp = self.processData(collection, 'avg', 'temperature')
-        max_temp = self.processData(collection, 'max', 'temperature')
-        min_temp = self.processData(collection, 'min', 'temperature')
-        avg_humidity = self.processData(collection, 'avg', 'humidity')
-        max_humidity = self.processData(collection, 'max', 'humidity')
-        min_humidity = self.processData(collection, 'min', 'humidity')
-        warningPercent = self.percentLogType(collection, 'warning')
-        errorPercent = self.percentLogType(collection, 'error')
-
-        stats = {
-            'average_temperature': avg_temp,
-            'max_temperature': max_temp,
-            'min_temperature': min_temp,
-            'average_humidity': avg_humidity,
-            'max_humidity': max_humidity,
-            'min_humidity': min_humidity,
-            'warning%': warningPercent,
-            'error%': errorPercent,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-        }
-        self.db[stats_collection].insert_one(stats)
-        print(f"Stats updated: {stats}")
+                }
+            }
+        ]
+        results = self.db['combined'].aggregate(pipeline)
+        for result in results:
+            average_data = {
+                'device_id': result['_id'],
+                'averageGeneralSpeed': result['averageGeneralSpeed'],
+                'maxGeneralSpeed': result['maxGeneralSpeed'],
+                'averageMotorSpeed': result['averageMotorSpeed'],
+                'maxMotorSpeed': result['maxMotorSpeed'],
+                'averageEngineTemperature': result['averageEngineTemperature'],
+                'maxEngineTemperature': result['maxEngineTemperature'],
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+            }
+            self.db['VehiculeStats'].update_one(
+                {'device_id': result['_id']},
+                {'$set': average_data},
+                upsert=True
+            )
+            print(f"Updated stats for device ID: {result['_id']}, Data: {average_data}")
 
 
-    def startPeriodicStatsUpdate(self, collection, stats_collection, interval=20):
-        def run():
-            while True:
-                self.computeAndStoreStats(collection, stats_collection)
-                time.sleep(interval)
+    def computeOutdoorStats(self):
+        pipeline = [
+            {
+                '$match': {
+                    'device_id': {'$ne': None}
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$device_id',
+                    'averageTemperature': {'$avg': '$temperature'},
+                    'maxTemperature' : {'$max': '$temperature'},
+                    'minTemperature' : {'$min': '$temperature'},
+                    'averageHumidity': {'$avg': '$humidity'},
+                    'maxHumidity': {'$max': '$humidity'},
+                    'minHumidity': {'$min': '$humidity'},
+                }
+            }
+        ]
+        results = self.db['combined'].aggregate(pipeline)
+        for result in results:
+            average_data = {
+                'device_id': result['_id'],
+                'averageOutdoorTemperature': result['averageTemperature'],
+                'maxOutdoorTemperature': result['maxTemperature'],
+                'minOutdoorTemperature': result['minTemperature'],
+                'averageOutdoorHumidity': result['averageHumidity'],
+                'maxOutdoorHumidity': result['maxHumidity'],
+                'minOutdoorHumidity': result['minHumidity'],
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+            }
+            self.db['OutdoorStats'].update_one(
+                {'device_id': result['_id']},
+                {'$set': average_data},
+                upsert=True
+            )
+            print(f"Updated stats for device ID: {result['_id']}, Data: {average_data}")
 
-        thread = Thread(target=run)
-        thread.daemon = True
-        thread.start()
+    def process_all_devices(self):
+        # Retrieve all unique device IDs from the combined collection
+        device_ids = self.db['combined'].distinct('device_id')
+
+        for device_id in device_ids:
+            self.calculate_and_store_aggregates(device_id)
+            print(f"Processed device_id: {device_id}")
+
+    def calculate_and_store_aggregates(self, device_id):
+        pipeline = [
+            {'$match': {'device_id': device_id}},
+            {'$group': {
+                '_id': '$device_id',
+                'averageTemperature': {'$avg': '$temperature'},
+                'maxTemperature': {'$max': '$temperature'},
+                'averageGeneralSpeed': {'$avg': '$generalSpeed'},
+                'maxGeneralSpeed': {'$max': '$generalSpeed'},
+                'averageMotorSpeed': {'$avg': '$motorSpeed'},
+                'maxMotorSpeed': {'$max': '$motorSpeed'},
+                'averageEngineTemperature': {'$avg': '$engine_temperature'},
+                'maxEngineTemperature': {'$max': '$engine_temperature'},
+            }}
+        ]
+        result = list(self.db['combined'].aggregate(pipeline))
+        if result:
+            aggregate_data = result[0]
+            aggregate_data['timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+            # Insert the aggregate data into a new collection
+            self.db['aggregated_data'].insert_one(aggregate_data)
+            print(f"Stored aggregate data: {aggregate_data}")
+        else:
+            print(f"No data found for device_id: {device_id}")
+
+    def count_general_log_types(self):
+    # Get all distinct device_ids
+        distinct_device_ids = self.db['combined'].distinct('device_id')
+        for device_id in distinct_device_ids:
+            pipeline = [
+                {
+                    '$match': {
+                        'device_id': device_id
+                    }
+                },
+                {
+                    '$group': {
+                        '_id': '$generalLogType',
+                        'count': {'$sum': 1}
+                    }
+                }
+            ]
+            results = self.db['combined'].aggregate(pipeline)
+            log_counts = {'error': 0, 'warning': 0, 'log': 0}
+            for result in results:
+                log_type = result['_id']
+                count = result['count']
+                if log_type in log_counts:
+                    log_counts[log_type] = count
+            # Prepare data to be stored in 'stats'
+            stats_data = {
+                'device_id': device_id,
+                'error_count': log_counts['error'],
+                'warning_count': log_counts['warning'],
+                'log_count': log_counts['log'],
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+            }
+            # Insert or update the stats data
+            self.db['logsStats'].update_one(
+                {'device_id': device_id},
+                {'$set': stats_data},
+                upsert=True
+            )
+            print(f"Updated log counts for device ID: {device_id}, Data: {stats_data}")
+
 
     def startPeriodicMergeUpdate(self, interval=3):
         def run():
@@ -120,11 +217,30 @@ class MongoDatabases:
         thread.daemon = True
         thread.start()
 
+    def startPeriodicStatsUpdate(self, interval=3):
+        def run():
+            while True:
+                db.computeVehicleStats()
+                db.computeOutdoorStats()
+                time.sleep(interval)
+
+        thread = Thread(target=run)
+        thread.daemon = True
+        thread.start()
+
 
 if __name__ == "__main__":
     db = MongoDatabases()
 
-    db.startPeriodicMergeUpdate()
+    # db.startPeriodicMergeUpdate()
+    # db.startPeriodicStatsUpdate()
+
+    # db.computeVehicleStats()
+    # db.computeOutdoorStats()
+
+    # db.process_all_devices()
+
+    db.count_general_log_types()
 
     # Keep the main thread alive
     while True:
