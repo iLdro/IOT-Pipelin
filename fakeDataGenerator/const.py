@@ -1,3 +1,4 @@
 import uuid
 
-fake_ids = [str(uuid.uuid4()) for _ in range(10)]
+fake_ids = ['f5a8c2c3-0f67-4e6c-849b-ae8a66b1fa8b', 'd4a58b22-5d21-4991-a3b2-38a3ff02f657', '43b981e8-45a1-4a76-9954-8e1e5c85f3a2', 'fac0e6e4-2b13-4f97-931b-788d5e9b7a54', 'f59a30e7-981b-48cb-b29a-aa550a1e7b8b', 'c9d78e70-d6b5-4cf3-ba66-1d87dd2a74d3', 'b85acabd-4a8a-4a68-906d-bd889b4e457f', 'b3e9a1db-913f-4c7b-9c47-0c04022c7d8e', '1e83b001-6c01-46e4-84f7-b217bdc30367', 'ce2ce033-3c4c-4753-8be5-d444ccbf6a35']
+

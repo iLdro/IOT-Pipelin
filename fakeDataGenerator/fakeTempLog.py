@@ -5,9 +5,8 @@ from publisher import send
 from const import fake_ids
 
 
-def generate_fake_thermotre_exterior_log():
+def generate_fake_thermotre_exterior_log(status):
     fake = Faker()
-    status = fake.random_element(elements=('active', 'inactive'))
 
     # Randomly decide if this log should be an error or warning
     if random.random() < 0.1:  # 10% chance of error
@@ -18,11 +17,7 @@ def generate_fake_thermotre_exterior_log():
         'temperature': None,
         'humidity': None,
         'status': status,
-        'log_type': 'error',
-        'location': {
-            'latitude': fake.latitude(),
-            'longitude': fake.longitude()
-        }
+        'log_type': 'error'
         }
     elif random.random() < 0.1:  # 10% chance of warning
         data = {
@@ -32,11 +27,7 @@ def generate_fake_thermotre_exterior_log():
         'temperature': round(fake.random.uniform(40.0, 70.0), 2) or round(fake.random.uniform(-20.0, 0), 2),
         'humidity': round(fake.random.uniform(70.0, 100.0), 2),
         'status': status,
-        'log_type': 'warning',
-        'location': {
-            'latitude': fake.latitude(),
-            'longitude': fake.longitude()
-        }
+        'log_type': 'warning'
         }
     else :
         data = {
@@ -46,11 +37,7 @@ def generate_fake_thermotre_exterior_log():
         'temperature': round(fake.random.uniform(20.0, 30.0), 2),
         'humidity': round(fake.random.uniform(30.0, 50.0), 2),
         'status': status,
-        'log_type': 'log',
-        'location': {
-            'latitude': fake.latitude(),
-            'longitude': fake.longitude()
-        }
+        'log_type': 'log'
     }
     send('iot_log', data)
 
